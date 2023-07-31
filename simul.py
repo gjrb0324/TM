@@ -36,24 +36,26 @@ def main():
     input_mode = 4096
     output_mode = 4096
     ccd_width = int(math.sqrt(output_mode))
-    imaginary = torch.randn(input_mode*output_mode)
-    real = torch.torch.randn(input_mode*output_mode)
-    tm = real+1j*imaginary
+    theta = torch.rand(input_mode*output_mode)
+    tm = torch.exp(2j*math.pi*theta)
+    #imaginary = torch.randn(input_mode*output_mode)
+    #real = torch.torch.randn(input_mode*output_mode)
+    #tm = real+1j*imaginary
     tm = torch.reshape(tm, (output_mode, input_mode))
     print(torch.mean(tm))
     print(torch.var(tm))
 
     amp = torch.rand(1)
     phase = torch.exp(2j*math.pi*torch.rand(1))
-    ref_field = torch.tile(amp*phase, [input_mode, 1])
+    ref_field_in = torch.tile(amp*phase, [input_mode, 1])
     #ref_field after TM
-    ref_field = torch.matmul(tm,ref_field)
+    ref_field_out = torch.matmul(tm,ref_field_in)
 
     '''Canonical basis'''
     controlled_phase = (torch.randperm(1000000)[:input_mode]/1000000)
     controlled_phase = torch.exp(2j*math.pi*controlled_phase)
     controlled_phase = torch.unsqueeze(controlled_phase,1)
-    input_field = torch.mul(ref_field, controlled_phase)
+    input_field = torch.mul(ref_field_in, controlled_phase)
 
     #It will be transposed
     observed_tm = torch.zeros(input_mode, output_mode,dtype=torch.complex64)
@@ -67,7 +69,7 @@ def main():
         inten = []
         for i in range(0, 4):
             step = cmath.exp(0.5j*i*math.pi)*output_field
-            inten_i = torch.square(torch.abs(ref_field + step))
+            inten_i = torch.square(torch.abs(ref_field_out + step))
             inten.append(inten_i)
 
         #Phase stepping
@@ -81,26 +83,26 @@ def main():
         observed_tm[n] = res*(1/field[n])
         '''
     observed_tm = torch.transpose(observed_tm,0,1)
-    observed_tm /= torch.norm(observed_tm)
+    #observed_tm /= torch.norm(observed_tm)
 
-    original_speckle = torch.square(torch.abs(ref_field+\
+    original_speckle = torch.square(torch.abs(ref_field_out+\
                                               torch.matmul(tm,input_field)))
     original_speckle = torch.reshape(original_speckle,(ccd_width,ccd_width))
     #original_speckle = original_speckle/torch.max(original_speckle)
 
-    recon_speckle = torch.square(torch.abs(ref_field+\
+    recon_speckle = torch.square(torch.abs(ref_field_out+\
                                         torch.matmul(observed_tm,input_field)))
     recon_speckle = torch.reshape(recon_speckle,(ccd_width,ccd_width))
     #recon_speckle = recon_speckle/torch.max(recon_speckle)
 
     transform = T.ToPILImage()
     img_t = transform(torch.abs(recon_speckle))
-    plt.imshow(img_t)
-    plt.show()
+    #plt.imshow(img_t)
+    #plt.show()
     img_t.save('./recon.png')
     img_t = transform(torch.abs(original_speckle))
-    plt.imshow(img_t)
-    plt.show()
+    #plt.imshow(img_t)
+    #plt.show()
     img_t.save('./origin.png')
 
 '''
