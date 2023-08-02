@@ -6,6 +6,7 @@ import torchvision.transforms as T
 from PIL import Image
 from matplotlib import pyplot as plt
 from tqdm import tqdm
+import random
 
 #Construct Hadamard matrix by Sylvester's construction + combine it with my idea
 def hadamard(order):
@@ -31,10 +32,28 @@ def hadamard(order):
                 result.append(torch.mul(matrix,matrix_list[n]))
         return result
 
+def quarter_circle_law(mode_num):
+    """
+    mode_num:min(output_mode_num,input_mode_num)
+        which means the number of singular values
+    """
+    num = 0
+    singular_list = torch.zeros(mode_num,dtype=torch.complex64)
+
+    while num < mode_num:
+        x = 2*random.random()
+        y = random.random()
+        res = math.sqrt(4-x*x)/math.pi
+        if y <= res:
+            singular_list[num]=x
+        num +=1
+
+    return singular_list
+
 def main():
 
-    input_mode = 4096
-    output_mode = 4096
+    input_mode = 256
+    output_mode = 256
     ccd_width = int(math.sqrt(output_mode))
     theta = torch.rand(input_mode*output_mode)
     tm = torch.exp(2j*math.pi*theta)
@@ -42,6 +61,19 @@ def main():
     #real = torch.torch.randn(input_mode*output_mode)
     #tm = real+1j*imaginary
     tm = torch.reshape(tm, (output_mode, input_mode))
+    #tm /= math.sqrt(output_mode)
+
+    #U,S,V = torch.linalg.svd(tm)
+    #zero_temp = torch.zeros((output_mode,input_mode),dtype=torch.complex64)
+    #singular_list = quarter_circle_law(min(output_mode,input_mode))
+    #for i in range(min(output_mode,input_mode)):
+    #    zero_temp[i,i]=singular_list[i]
+
+    #S = zero_temp
+    #tm = torch.matmul(torch.matmul(U,S), \
+    #                  torch.transpose(torch.conj(V),0,1))
+    #tm = torch.mul(tm,math.sqrt(output_mode))
+
     print(torch.mean(tm))
     print(torch.var(tm))
 
@@ -83,7 +115,15 @@ def main():
         observed_tm[n] = res*(1/field[n])
         '''
     observed_tm = torch.transpose(observed_tm,0,1)
-    #observed_tm /= torch.norm(observed_tm)
+
+    #row normalisation
+    filtered_tm_1 = observed_tm/torch.norm(observed_tm,dim=1)
+    #column normalisation
+    row_norm = torch.unsqueeze(torch.norm(observed_tm,dim=0),0)
+    row_norm = torch.transpose(row_norm,0,1)
+    filtered_tm_2 = observed_tm/row_norm
+    #Total normalisation
+    filtered_tm_3 = observed_tm/torch.norm(observed_tm)
 
     original_speckle = torch.square(torch.abs(ref_field_out+\
                                               torch.matmul(tm,input_field)))
